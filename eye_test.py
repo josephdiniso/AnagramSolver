@@ -55,3 +55,4 @@ while 1:
         pass
 cap.release() 
 cv2.destroyAllWindows() 
+input('Press ENTER to exit')
