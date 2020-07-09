@@ -2,6 +2,7 @@
 Python program to give the longest possible words for the iOS GamePidgeon game <b>Anagrams</b>
 
 ## How to Use:
+> Note: You must have python3 installed
 In the command line enter the following:
 
 ```bash
