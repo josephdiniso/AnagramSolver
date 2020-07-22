@@ -3,10 +3,31 @@
 import argparse
 import os
 from pathlib import Path
+import time
 
+import dlib
+from scipy.spatial import distance as dist
 import cv2
+from imutils import face_utils
 
 from longest_word import get_longest_words
+
+def eye_aspect_ratio(eye):
+    """
+    Computes aspect ratio of a given eye
+
+    Args:
+        eye ()
+    """
+    # Distance between each eye's vertical landmarks
+	A = dist.euclidean(eye[1], eye[5])
+	B = dist.euclidean(eye[2], eye[4])
+
+	# Euclidean distance between horizontal landmars
+	C = dist.euclidean(eye[0], eye[3])
+
+	ear = (A + B) / (2.0 * C)
+	return ear
 
 
 def display_words(window_size: int, letters: str, **kwargs):
@@ -14,50 +35,52 @@ def display_words(window_size: int, letters: str, **kwargs):
     word_iter = iter(word_list)
     output_text = next(word_iter)
     font = cv2.FONT_HERSHEY_SIMPLEX
-    face_path = os.path.join(os.path.dirname(__file__), "classifiers", "haarcascade_frontalface_default.xml")
-    face_cascade = cv2.CascadeClassifier(face_path) 
-    eye_path = os.path.join(os.path.dirname(__file__), "classifiers", "haarcascade_eye.xml")
-    eye_cascade = cv2.CascadeClassifier(eye_path)
-    cap = cv2.VideoCapture(0) 
-    
-    switch = False
-    thresh = False
-    thresh_val=0
+
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor("/home/jdiniso/github/AnagramsCheat/shape_predictor_68_face_landmarks.dat")
+
+    (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
+    (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
+    reset = True
+    cap = cv2.VideoCapture(0)
+    time_start = 0
+
     while 1:
-        ret, frame = cap.read()
-        if window_size:
-            frame = cv2.resize(frame, (window_size, window_size))
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5) 
-        center_point = int(window_size/2)
-        cv2.putText(frame,output_text,(center_point,center_point), font, 3, (255,0,0),2, cv2.LINE_AA)     
-        for (x,y,w,h) in faces: 
-            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,255,0),2) 
-            roi_gray = gray[y:y+h, x:x+w] 
-            roi_color = frame[y:y+h, x:x+w]
-            eyes = eye_cascade.detectMultiScale(roi_gray) 
-            # Puts rectangle over eyes
-            for (ex,ey,ew,eh) in eyes: 
-                cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,127,255),2) 
-            # Logic to check if users face has gone above the threshold value
-            if(abs(thresh_val-y)>20 and thresh==True and switch == False):
-                switch = True
-                output_text = next(word_iter, "Out of words")
-            elif(abs(thresh_val-y)<10 and switch==True and thresh==True):
-                switch = False
-        cv2.imshow('frame',frame) 
-        k = cv2.waitKey(30) & 0xff
-        if k == ord('q') or k==27: 
+        _, frame = cap.read()
+        frame = cv2.resize(frame, (1000,1000))
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        rects = detector(img, 0)
+
+        for rect in rects:
+            shape = predictor(img, rect)
+            shape = face_utils.shape_to_np(shape)
+
+            leftEye = shape[lStart:lEnd]
+            rightEye = shape[rStart:rEnd]
+            leftEAR = eye_aspect_ratio(leftEye)
+            rightEAR = eye_aspect_ratio(rightEye)
+            ear = (leftEAR+rightEAR) / 2
+
+            if ear < 0.34:
+                if not time_start:
+                    time_start = time.time() * 1000.
+                if time.time() * 1000. - time_start > 5 and reset:
+                    output_text = next(word_iter)
+                    reset = False
+            else:
+                reset = True
+                time_start = None
+
+            leftEyeHull = cv2.convexHull(leftEye)
+            rightEyeHull = cv2.convexHull(rightEye)
+            cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
+            cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
+        cv2.putText(frame,output_text,(500,500), font, 3, (255,0,0),2, cv2.LINE_AA)   
+        cv2.imshow("img",frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-        elif k == ord('m'):
-            try:
-                print('Resetting height to {}px'.format(y))
-                thresh_val = y
-            except UnboundLocalError:
-                print("No face detected")
-            thresh = True
-    cap.release() 
-    cv2.destroyAllWindows() 
+    cap.release()
+    cv2.destroyAllWindows()
 
     
 def main():
