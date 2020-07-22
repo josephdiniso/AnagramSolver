@@ -34,3 +34,6 @@ python main.py --letters aencaq
 
 ## How it works:
 The program takes in letters as an argument and calculates all possible combinations of letters, showing the highest awarding letters first. Using dlib's facial landmark detector, the user's eyes are tracked. When the aspect ratio average of the eyes drops below a certain threshold (meaning the eyes are closed), then the program displays the next best word to use in Anagrams.
+
+### TODO:
+- [ ] Containerize program into a docker image
